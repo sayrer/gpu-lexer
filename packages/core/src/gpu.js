@@ -25,7 +25,6 @@ export const BUFFER_LEAF_STATES = 6;
 export const BUFFER_TREE_UP = 7;
 export const BUFFER_SCRATCH = 8;
 export const BUFFER_HYBRID_NEIGHBORS = 9;
-export const BUFFER_HYBRID_LOCAL = 10;
 const BUFFER_WEIGHTS = -1;
 const BUFFER_OBJECT = 0;
 const BUFFER_SIZE = 1;
@@ -131,7 +130,6 @@ export function createRuntime(
     ensureBuffer(BUFFER_SCRATCH,
       Math.max(blockCount * HIDDEN_SIZE * 16, treeNodes * HIDDEN_SIZE * 4), STORAGE);
     ensureBuffer(BUFFER_HYBRID_NEIGHBORS, blockCount * 8, STORAGE);
-    ensureBuffer(BUFFER_HYBRID_LOCAL, tokenCount * HIDDEN_SIZE * 4, STORAGE);
     try {
       device.queue.writeBuffer(featureBuffer, 0, features);
       device.queue.writeBuffer(streamBuffer, 0, metadata);
@@ -148,7 +146,7 @@ export function createRuntime(
         const x = Math.min(65_535, workgroups);
         pass.dispatchWorkgroups(x, Math.ceil(workgroups / x));
       };
-      const counts = [(blockCount + 63) >> 6, (streams.length + 127) >> 7,
+      const counts = [(blockCount + 63) >> 6, streams.length >> 1,
         blockCount, streams.length * 2, blockCount];
       counts.forEach((count, index) => encode(pipelines[index], groups[index], count));
       encode(pipelines[PIPELINE_TREE_GLOBAL], groups[PIPELINE_TREE_GLOBAL], streams.length / 2);
@@ -196,12 +194,11 @@ export function createRuntime(
       [[0, BUFFER_FEATURES], [2, BUFFER_PARAMS], [9, BUFFER_BLOCKS], [12, BUFFER_HYBRID_NEIGHBORS]],
       [[2, BUFFER_PARAMS], [3, BUFFER_STREAMS], [12, BUFFER_HYBRID_NEIGHBORS]],
       [[0, BUFFER_FEATURES], [2, BUFFER_PARAMS], [3, BUFFER_STREAMS], [4, BUFFER_WEIGHTS],
-        [9, BUFFER_BLOCKS], [10, BUFFER_HYBRID_LOCAL], [11, BUFFER_SCRATCH],
-        [12, BUFFER_HYBRID_NEIGHBORS]],
+        [9, BUFFER_BLOCKS], [11, BUFFER_SCRATCH], [12, BUFFER_HYBRID_NEIGHBORS]],
       [[2, BUFFER_PARAMS], [3, BUFFER_STREAMS], [11, BUFFER_SCRATCH]],
-      [[2, BUFFER_PARAMS], [3, BUFFER_STREAMS], [4, BUFFER_WEIGHTS],
+      [[0, BUFFER_FEATURES], [2, BUFFER_PARAMS], [3, BUFFER_STREAMS], [4, BUFFER_WEIGHTS],
         [5, BUFFER_LEAF_STATES], [6, BUFFER_TREE_UP], [9, BUFFER_BLOCKS],
-        [10, BUFFER_HYBRID_LOCAL], [11, BUFFER_SCRATCH]],
+        [11, BUFFER_SCRATCH], [12, BUFFER_HYBRID_NEIGHBORS]],
       [[2, BUFFER_PARAMS], [3, BUFFER_STREAMS], [4, BUFFER_WEIGHTS],
         [6, BUFFER_TREE_UP], [11, BUFFER_SCRATCH]],
       [[0, BUFFER_FEATURES], [1, BUFFER_LABELS], [2, BUFFER_PARAMS], [4, BUFFER_WEIGHTS],
@@ -372,11 +369,13 @@ function nextPowerOfTwo(value) {
   return 2 ** (32 - Math.clz32(value - 1));
 }
 
+// Round up to a sixteenth of the next power of two (at least 256 bytes): at
+// most ~6% slack on large inputs instead of up to 2x, while steadily growing
+// inputs still reallocate only after meaningful growth.
 function growCapacity(minimum, maximum) {
-  let size = 256;
-  while (size < minimum && size <= maximum / 2) size *= 2;
-  if (size < minimum) size = Math.ceil(minimum / 4) * 4;
-  return size;
+  const step = Math.max(256, 2 ** (32 - Math.clz32(minimum - 1)) / 16);
+  const size = Math.max(256, Math.ceil(minimum / step) * step);
+  return size <= maximum ? size : Math.ceil(minimum / 4) * 4;
 }
 
 export function preparePromotedWeights() {

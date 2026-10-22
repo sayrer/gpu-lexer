@@ -51,4 +51,13 @@ WebGPU is most useful for warm, large, or batched inputs. Device acquisition, pi
 
 On September 16, 2026, the four-part workgroups and direct last-span reuse reduced median production-bundle time from 668.25 ms to 557.85 ms for 10 concatenated copies of three.min.js (5,556,500 characters), and from 62.9 ms to 54.7 ms for one copy. Each variant had 18 measured calls across two dedicated workers, with three warm-ups per worker and ABBA ordering. The same checkpoint produced identical labels and spans across 117 cases (3,317,022 parts) in each of FP16 and FP32, including partial blocks. Batched requests also returned identical spans. These are single-device Chrome 152 measurements; timings vary with system load and garbage collection. Raw timings, bundle hashes, and parity results are recorded in [the benchmark report](packages/benchmark/reports/tree-runtime-2026-09-16.json).
 
+On October 22, 2026, four exact changes reduced the same 10-copy input from about 290 ms to 212 ms in fresh benchmark workers, and GPU buffer allocation from 891 MiB to 220 MiB with FP16:
+
+- Matrices read across output units (state input, gate and mix, classifier, auxiliary and output) are stored column-major, so adjacent threads read adjacent weights.
+- Local states are recomputed in workgroup memory by the scan and mix passes instead of round-tripping a part × hidden FP32 buffer; each part's raw embedding is computed once per block.
+- Nonspace-neighbor block prefixes use a parallel workgroup scan, and both halves of the classify workgroup share the block-local tree levels.
+- CPU preparation uses lookup tables and buffer capacity is rounded to a sixteenth of the next power of two.
+
+Labels and spans matched the previous runtime for 5,028 corpus files, one request at a time and batched, plus one and ten copies of three.min.js, in both FP16 and FP32. See [the browser benchmark report](packages/benchmark/reports/browser-performance-2026-10-22.json).
+
 The runtime returns spans to JavaScript, so it necessarily pays one readback synchronization. It does not render text on the GPU. For tiny snippets, a CPU lexer can be faster because dispatch overhead dominates.

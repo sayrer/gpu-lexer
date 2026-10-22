@@ -2,7 +2,7 @@
 
 ## Model
 
-The published package embeds checkpoint `20260916T055435.785Z`, a format-9 hierarchical tree classifier. It has 41,609 training parameters; the browser projection retains 41,321 reachable int6 weights (30,991 packed bytes). The full minified JavaScript package, including shader and weights, is 27.64 KiB (28,305 bytes) with Brotli compression.
+The published package embeds checkpoint `20260916T055435.785Z`, a format-9 hierarchical tree classifier. It has 41,609 training parameters; the browser projection retains 41,321 reachable int6 weights (30,991 packed bytes). The full minified JavaScript package, including shader and weights, is 27.91 KiB (28,580 bytes) with Brotli compression.
 
 The model receives no language ID. It predicts one of nine visual labels for each mechanically split source part: plain, comment, string, number, keyword, type, function, constant, or operator. It also learns auxiliary lexical states used internally by the classifier.
 

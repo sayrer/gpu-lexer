@@ -1,0 +1,119 @@
+{
+  "status": "done",
+  "copies": 10,
+  "characters": 5556500,
+  "source": "https://unpkg.com/three@0.97.0/build/three.min.js",
+  "warmups": 1,
+  "measuredRuns": 3,
+  "statistic": "median of fresh-worker samples",
+  "method": "Each sample is a fresh dedicated worker that times one call after one warm-up call; engine order rotates every round; DOM rendering excluded.",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+  "times": {
+    "gpu-lexer": 219.4,
+    "Prism.js": 1177.7,
+    "Highlight.js": 1305.8,
+    "Sugar High": 808.2,
+    "Starry Night": 11061.9,
+    "Shiki": 29529
+  },
+  "samples": {
+    "gpu-lexer": [
+      223.9,
+      210,
+      219.4
+    ],
+    "Prism.js": [
+      1177.7,
+      1220.5,
+      1144.8
+    ],
+    "Highlight.js": [
+      1305.8,
+      1307.5,
+      1305.6
+    ],
+    "Sugar High": [
+      803.3,
+      809.3,
+      808.2
+    ],
+    "Starry Night": [
+      11061.9,
+      11078.5,
+      10925.7
+    ],
+    "Shiki": [
+      29529,
+      29332,
+      29646.8
+    ]
+  },
+  "date": "2026-10-22",
+  "modelRun": "20260916T055435.785Z",
+  "sourceSha256": "3ed7c9316c0724813330f2720111f295827ac22a04da471f167c0fa06b9f28e5",
+  "hardware": {
+    "model": "MacBook Pro",
+    "chip": "Apple M4 Pro",
+    "gpuCores": 20,
+    "memoryGB": 24,
+    "macOS": "26.7.1",
+    "chrome": "156.0.8078.48 (headless)"
+  },
+  "gpuLexerBeforeAfter": {
+    "method": "Same runner, gpu-lexer only, 5 fresh-worker samples per series, two alternating series per build; both workers bundled from source. samplesMs lists the second series of each build.",
+    "before": {
+      "ref": "07f3e56",
+      "mediansMs": [
+        289.6,
+        290.2
+      ],
+      "samplesMs": [
+        290.2,
+        302,
+        287.9,
+        285.2,
+        290.4
+      ]
+    },
+    "after": {
+      "ref": "working tree",
+      "mediansMs": [
+        212.1,
+        212.8
+      ],
+      "samplesMs": [
+        221.2,
+        212.8,
+        219.3,
+        209.7,
+        210.8
+      ]
+    }
+  },
+  "labelParity": {
+    "reference": "07f3e56",
+    "files": 5028,
+    "spansPerMode": 5979352,
+    "modes": {
+      "f16": {
+        "mismatches": 0,
+        "gpuAllocatedBytes": {
+          "base": 934282496,
+          "next": 230884352
+        }
+      },
+      "f32": {
+        "mismatches": 0,
+        "gpuAllocatedBytes": {
+          "base": 1219495168,
+          "next": 398656512
+        }
+      }
+    },
+    "note": "Every file was compared one request at a time and in batches of 24, plus three.min.js x1 and x10."
+  },
+  "notes": [
+    "Replaces the September 16 single-sample comparison. Re-measured comparison libraries were 4-12x faster than that run under the same versions, consistent with independent October measurements, so the earlier figures were not representative.",
+    "gpu-lexer returns span objects; Shiki returns tokens; Starry Night returns a HAST tree; Sugar High, Prism.js and Highlight.js return HTML."
+  ]
+}

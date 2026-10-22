@@ -17,7 +17,7 @@ The CPU makes one mechanical pass over the source, splitting it into word runs, 
 
 The GPU embeds those sparse features into 32 learned channels. A five-part neighborhood and exact bidirectional affine scans add ordered local context. A shared-weight binary tree then combines 32-part blocks bottom-up, merges block roots across the whole source, and propagates context back down. A small classifier assigns one of nine visual classes to every original part in parallel; adjacent equal classes become the returned spans.
 
-The promoted runtime is format 9 (`local-affine-tree`), with 41,321 reachable browser weights encoded at six bits each. The current minified package is 27.64 KiB (28,305 bytes) with Brotli compression.
+The promoted runtime is format 9 (`local-affine-tree`), with 41,321 reachable browser weights encoded at six bits each. The current minified package is 27.91 KiB (28,580 bytes) with Brotli compression.
 
 ## Accuracy
 
