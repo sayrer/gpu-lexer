@@ -11,6 +11,7 @@ const allEngines = [
   ["Sugar High", "./sugar-high.js?run=10"],
   ["Starry Night", "./starry-night.js?run=10"],
   ["Shiki", "./shiki.js?run=10"],
+  ["Highlights", "./pierre-highlights.js?run=10"],
 ];
 // ?engines=gpu-lexer,Prism.js runs a subset, e.g. for before/after comparisons.
 const selected = new URLSearchParams(location.search).get("engines")?.split(",");

@@ -9,43 +9,49 @@
   "method": "Each sample is a fresh dedicated worker that times one call after one warm-up call; engine order rotates every round; DOM rendering excluded.",
   "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
   "times": {
-    "gpu-lexer": 219.4,
-    "Prism.js": 1177.7,
-    "Highlight.js": 1305.8,
-    "Sugar High": 808.2,
-    "Starry Night": 11061.9,
-    "Shiki": 29529
+    "gpu-lexer": 220.5,
+    "Prism.js": 1238.1,
+    "Highlight.js": 1364.0,
+    "Sugar High": 820.0,
+    "Starry Night": 11356.1,
+    "Shiki": 30438.8,
+    "Highlights": 75.3
   },
   "samples": {
     "gpu-lexer": [
-      223.9,
-      210,
-      219.4
+      220.5,
+      218.7,
+      227.7
     ],
     "Prism.js": [
-      1177.7,
-      1220.5,
-      1144.8
+      1243.5,
+      1238.1,
+      1186.7
     ],
     "Highlight.js": [
-      1305.8,
-      1307.5,
-      1305.6
+      1344.4,
+      1364.0,
+      1380.8
     ],
     "Sugar High": [
-      803.3,
-      809.3,
-      808.2
+      820.0,
+      802.6,
+      859.8
     ],
     "Starry Night": [
-      11061.9,
-      11078.5,
-      10925.7
+      11094.7,
+      11580.2,
+      11356.1
     ],
     "Shiki": [
-      29529,
-      29332,
-      29646.8
+      30566.3,
+      30438.8,
+      30254.2
+    ],
+    "Highlights": [
+      73.5,
+      76.9,
+      75.3
     ]
   },
   "date": "2026-10-22",
@@ -114,6 +120,19 @@
   },
   "notes": [
     "Replaces the September 16 single-sample comparison. Re-measured comparison libraries were 4-12x faster than that run under the same versions, consistent with independent October measurements, so the earlier figures were not representative.",
-    "gpu-lexer returns span objects; Shiki returns tokens; Starry Night returns a HAST tree; Sugar High, Prism.js and Highlight.js return HTML."
-  ]
+    "gpu-lexer returns span objects; Highlights and Shiki return themed tokens (codeToTokens, github-light); Starry Night returns a HAST tree; Sugar High, Prism.js and Highlight.js return HTML."
+  ],
+  "libraryVersions": {
+    "@pierre/highlights": "0.2.0",
+    "sugar-high": "2.3.1",
+    "prismjs": "1.30.0",
+    "highlight.js": "11.12.0",
+    "@wooorm/starry-night": "3.11.0",
+    "shiki": "4.4.3"
+  },
+  "sizes": {
+    "method": "pnpm --filter @gpu-lexer/benchmark size (minified + Brotli 11)",
+    "gpu-lexer": 28599,
+    "Highlights (all 80 languages)": 98187
+  }
 }
