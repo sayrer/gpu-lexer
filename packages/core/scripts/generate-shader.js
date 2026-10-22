@@ -5,9 +5,9 @@ import { createTreeShader } from "../src/tree-shader.js";
 const ENTRY_POINTS = [
   "hybrid_neighbor_blocks", "hybrid_neighbor_prefixes", "hybrid_scan_blocks",
   "hybrid_scan_prefixes", "hybrid_mix_tree_up",
-  "tree_global", "tree_down_classify",
+  "tree_global", "tree_down", "classify",
 ];
-const MINIFIED_ENTRY_POINTS = "abcdefg";
+const MINIFIED_ENTRY_POINTS = "abcdefgh";
 const STRUCT_MEMBERS = {
   stream_count: "a",
   token_count: "b",

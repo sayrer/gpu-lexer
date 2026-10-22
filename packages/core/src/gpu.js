@@ -1,5 +1,5 @@
 import {
-  HIDDEN_SIZE, WEIGHT_RANGES, WEIGHTS,
+  APPENDED, HIDDEN_SIZE, WEIGHT_COUNT, WEIGHT_RANGES, WEIGHTS,
 } from "./model.runtime.generated.js";
 import { createPromotedShader, TREE_ENTRY_POINTS } from "./shader.min.generated.js";
 import { prepareTreeSource, releaseTreePrepared } from "./prepare-tree.js";
@@ -155,6 +155,7 @@ export function createRuntime(
       counts.forEach((count, index) => encode(pipelines[index], groups[index], count));
       encode(pipelines[PIPELINE_TREE_GLOBAL], groups[PIPELINE_TREE_GLOBAL], streams.length / 2);
       encode(pipelines[6], groups[6], blockCount);
+      encode(pipelines[7], groups[7], (blockCount + 3) >> 2);
       pass.end();
       encoder.copyBufferToBuffer(labelBuffer, 0, readBuffer, 0, labelBytes);
       device.queue.submit([encoder.finish()]);
@@ -206,8 +207,11 @@ export function createRuntime(
         [10, BUFFER_HYBRID_LOCAL], [11, BUFFER_SCRATCH]],
       [[2, BUFFER_PARAMS], [3, BUFFER_STREAMS], [4, BUFFER_WEIGHTS],
         [6, BUFFER_TREE_UP], [11, BUFFER_SCRATCH]],
-      [[1, BUFFER_LABELS], [2, BUFFER_PARAMS], [4, BUFFER_WEIGHTS], [3, BUFFER_STREAMS],
-        [5, BUFFER_LEAF_STATES], [7, BUFFER_HYBRID_NEIGHBORS], [9, BUFFER_BLOCKS], [11, BUFFER_SCRATCH]],
+      [[2, BUFFER_PARAMS], [3, BUFFER_STREAMS], [4, BUFFER_WEIGHTS], [5, BUFFER_LEAF_STATES],
+        [9, BUFFER_BLOCKS], [10, BUFFER_HYBRID_LOCAL], [11, BUFFER_SCRATCH]],
+      [[1, BUFFER_LABELS], [2, BUFFER_PARAMS], [4, BUFFER_WEIGHTS], [5, BUFFER_LEAF_STATES],
+        [7, BUFFER_HYBRID_NEIGHBORS], [8, BUFFER_WEIGHTS], [9, BUFFER_BLOCKS],
+        [10, BUFFER_HYBRID_LOCAL]],
     ];
     return entries.map((entry, index) => bind(pipelines[index], entry));
   }
@@ -382,7 +386,7 @@ function growCapacity(minimum, maximum) {
 }
 
 export function preparePromotedWeights() {
-  const result = new Float32Array(WEIGHTS.length);
+  const result = new Float32Array(WEIGHT_COUNT);
   let start = 0;
   for (let range = 0; range < WEIGHT_RANGES.length; range += 2) {
     const end = WEIGHT_RANGES[range];
@@ -393,6 +397,16 @@ export function preparePromotedWeights() {
       result[index] = (value & 1 ? -(value + 1) / 2 : value / 2) * scale;
     }
     start = end;
+  }
+  // Appended copies: column-major when transposed, else row-major with a
+  // padded stride; see appendedTensorLayout.
+  for (const [source, rows, cols, target, stride, transposed] of APPENDED) {
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const at = transposed ? target + col * rows + row : target + row * stride + col;
+        result[at] = result[source + row * cols + col];
+      }
+    }
   }
   return result;
 }

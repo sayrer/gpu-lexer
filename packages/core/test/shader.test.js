@@ -8,7 +8,7 @@ import { createTreeShader } from "../src/tree-shader.js";
 
 const entries = [
   "hybrid_neighbor_blocks", "hybrid_neighbor_prefixes", "hybrid_scan_blocks",
-  "hybrid_scan_prefixes", "hybrid_mix_tree_up", "tree_global", "tree_down_classify",
+  "hybrid_scan_prefixes", "hybrid_mix_tree_up", "tree_global", "tree_down", "classify",
 ];
 
 test("the active tree architecture and generated shaders compile", async () => {

@@ -18,7 +18,7 @@ const STORAGE = 128;
 const QUERY_RESOLVE = 512;
 const TREE_PASS_NAMES = [
   "hybrid_neighbor_blocks", "hybrid_neighbor_prefixes", "hybrid_scan_blocks",
-  "hybrid_scan_prefixes", "hybrid_mix_tree_up", "tree_global", "tree_down_classify",
+  "hybrid_scan_prefixes", "hybrid_mix_tree_up", "tree_global", "tree_down", "classify",
 ];
 
 /** Benchmark-only phase profiler. Nothing in this module is bundled by core. */
@@ -134,6 +134,7 @@ async function runProfiledTree(runner, features, streams, profileGpuPasses) {
   dispatches.push(
     [runner.pipelines[PIPELINE_TREE_GLOBAL], groups[PIPELINE_TREE_GLOBAL], streams.length / 2],
     [runner.pipelines[6], groups[6], blockCount],
+    [runner.pipelines[7], groups[7], Math.ceil(blockCount / 4)],
   );
   if (timestampSet) {
     dispatches.forEach(([pipeline, group, count], index) =>

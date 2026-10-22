@@ -74,6 +74,39 @@ export function runtimeTensorLayout(model) {
   });
 }
 
+// Copies of some tensors appended after the compact weights, in layouts the
+// kernels read more efficiently; values are identical to the originals.
+// Column-major copies of the scan matrices put a SIMD group's 32 channels on
+// consecutive addresses. The classifier matrix gets a 16-byte-aligned copy
+// with a padded row stride when the original cannot be read as vec4 rows.
+export function appendedTensorLayout(model) {
+  const h = model.hiddenSize;
+  const auxiliary = model.architecture.auxiliaryStates.length;
+  const classifier = model.architecture.classifierDimensions;
+  const layout = runtimeTensorLayout(model);
+  const tensors = new Map(layout.map((tensor) => [tensor.name, tensor]));
+  const last = layout[layout.length - 1];
+  let offset = last.offset + last.length;
+  const copies = [
+    ["stateInput", h, h, true], ["stateGate", h, h, true], ["stateMix", h, 2 * h, true],
+  ];
+  const classifierInput = tensors.get("classifierInput");
+  const classifierStride = 2 * h + auxiliary;
+  if (classifierInput.offset % 4 !== 0 || classifierStride % 4 !== 0) {
+    copies.push(["classifierInput", classifier, classifierStride, false]);
+  }
+  const entries = {};
+  for (const [name, rows, cols, transposed] of copies) {
+    const source = tensors.get(name);
+    if (source.length !== rows * cols) throw new Error(`runtime tensor ${name} has an unexpected shape`);
+    offset = (offset + 3) & ~3;
+    const stride = transposed ? rows : (cols + 3) & ~3;
+    entries[name] = { source: source.offset, rows, cols, stride, transposed, offset };
+    offset += transposed ? rows * cols : rows * stride;
+  }
+  return { count: (offset + 3) & ~3, entries };
+}
+
 function embeddingSourceRanges(tensor, hidden, inputSize, omittedRows) {
   if (tensor.length !== inputSize * hidden) {
     throw new Error("invalid feature embedding tensor length");

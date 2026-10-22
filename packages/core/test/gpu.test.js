@@ -6,7 +6,7 @@ import {
 } from "../src/gpu.js";
 import { runtimeTensorLayout } from "../src/model-layout.js";
 import { promotedModel } from "../src/model.generated.js";
-import { WEIGHT_RANGES, WEIGHTS } from "../src/model.runtime.generated.js";
+import { APPENDED, WEIGHT_COUNT, WEIGHT_RANGES, WEIGHTS } from "../src/model.runtime.generated.js";
 import { runtimeTreeFeatureLayout, treeFeatureLayout } from "../src/tree-features.js";
 
 test("the runtime fails clearly when WebGPU is unavailable", async () => {
@@ -63,10 +63,27 @@ test("mapped readback views are limited without copying capacity", () => {
 test("the promoted positional weights expand to finite runtime values", () => {
   const weights = preparePromotedWeights();
   const tensors = runtimeTensorLayout(promotedModel);
-  assert.equal(weights.length, 41_321);
+  assert.equal(WEIGHTS.length, 41_321);
+  assert.equal(weights.length, WEIGHT_COUNT);
+  assert.ok(WEIGHT_COUNT > WEIGHTS.length);
   assert.equal(weights.every(Number.isFinite), true);
+  // The appended tail holds exactly the source matrices: column-major when
+  // transposed, row-major with a padded stride otherwise.
+  let appendedEnd = WEIGHTS.length;
+  for (const [source, rows, cols, target, stride, transposed] of APPENDED) {
+    assert.equal(target, (appendedEnd + 3) & ~3);
+    assert.equal(target % 4, 0);
+    appendedEnd = target + (transposed ? rows * cols : rows * stride);
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const at = transposed ? target + col * rows + row : target + row * stride + col;
+        assert.equal(weights[at], weights[source + row * cols + col]);
+      }
+    }
+  }
+  assert.equal((appendedEnd + 3) & ~3, WEIGHT_COUNT);
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-  const expected = new Float32Array(weights.length);
+  const expected = new Float32Array(WEIGHTS.length);
   for (const tensor of tensors) {
     let output = tensor.offset;
     for (let range = 0; range < tensor.sourceRanges.length; range += 2) {
@@ -77,7 +94,7 @@ test("the promoted positional weights expand to finite runtime values", () => {
       }
     }
   }
-  assert.deepEqual(weights, expected);
+  assert.deepEqual(weights.subarray(0, WEIGHTS.length), expected);
   assert.equal(tensors.some(({ name }) => name === "neighborScale"), false);
   assert.ok(tensors.some((tensor, index) => WEIGHT_RANGES[index * 2 + 1] !== tensor.scale));
 });

@@ -12,7 +12,7 @@ import { promotedModel } from "../src/model.generated.js";
 import { treeInputSize } from "../src/tree-features.js";
 
 const entries = ["hybrid_neighbor_blocks", "hybrid_neighbor_prefixes", "hybrid_scan_blocks",
-  "hybrid_scan_prefixes", "hybrid_mix_tree_up", "tree_global", "tree_down_classify"];
+  "hybrid_scan_prefixes", "hybrid_mix_tree_up", "tree_global", "tree_down", "classify"];
 
 function fixture(hiddenSize = 32, bits = 6, hybrid = true, featureVersion = 2) {
   const h = hiddenSize;
@@ -76,19 +76,21 @@ for (const hidden of [32]) for (const f16 of [false, true]) {
     assert.match(shader, /token \+ d >= start \+ 2u/);
     assert.match(shader, /@workgroup_size\(256\)\s+fn tree_global/);
     assert.match(shader, /@workgroup_size\(256\)\s+fn hybrid_neighbor_prefixes/);
-    assert.match(shader, /@workgroup_size\(128\)\s+fn tree_down_classify/);
-    assert.match(shader, /bitcast<f32>\(previous\)/);
-    // Neighbour lookups come from the block mask, not per-lane search loops.
+    assert.match(shader, /@workgroup_size\(128\)\s+fn tree_down\(/);
+    assert.match(shader, /@workgroup_size\(128\)\s+fn classify\(/);
+    assert.match(shader, /fn affine_tokens\(/);
+    assert.doesNotMatch(shader, /fn affine_at\(/);
+    // Neighbor lookups come from the block mask, not per-lane search loops.
     const scanBlocks = shader.slice(shader.indexOf("fn hybrid_scan_blocks"), shader.indexOf("fn hybrid_scan_prefixes"));
     assert.doesNotMatch(scanBlocks, /break;/);
     assert.match(scanBlocks, /countTrailingZeros\(above\)/);
-    const classify = shader.slice(shader.indexOf("fn tree_down_classify"));
-    assert.doesNotMatch(classify, /features\[/);
+    const classify = shader.slice(shader.indexOf("fn classify"));
+    assert.doesNotMatch(classify, /features\[|workgroupBarrier|var<workgroup>/);
     assert.match(classify, /block_masks\[block_index\]\.z/);
+    assert.match(classify, /weights4\[/);
     assert.doesNotMatch(shader, /fn hybrid_local_states/);
     assert.doesNotMatch(shader, /var<storage, read_write> hybrid_pairs/);
     assert.match(shader, new RegExp(`var<workgroup> hybrid_work: array<vec4<f32>, ${32 * hidden}>`));
-    assert.match(shader, /var<workgroup> classifier_projected/);
     assert.doesNotMatch(shader, /tree_down:|contexts:/);
     assert.equal(runtimeTensorLayout(model).some(({ name }) => name === "neighborScale"), false);
   });
@@ -158,15 +160,21 @@ test("tree runtime wires the active hybrid passes and reuses buffers", async () 
   await runner.run(new Uint32Array(66 * 2), streams, (labels) => assert.equal(labels.length, 17));
   assert.deepEqual(device.dispatches, [
     ["a", 1, 1], ["b", 2, 1], ["c", 4, 1], ["d", 8, 1],
-    ["e", 4, 1], ["f", 2, 1], ["g", 4, 1],
+    ["e", 4, 1], ["f", 2, 1], ["g", 4, 1], ["h", 1, 1],
   ]);
   assert.equal(device.computePasses, 1);
   const up = device.bindGroups.find(({ layout }) => layout === "e");
   assert.equal(up.entries.some(({ binding }) => binding === 0), false);
-  // The classifier reads block masks through the read-only binding instead of features.
-  const classify = device.bindGroups.find(({ layout }) => layout === "g");
+  // The classifier reads block masks and the vec4 weight view; the tree
+  // kernel hands it contexts through hybrid_local.
+  const down = device.bindGroups.find(({ layout }) => layout === "g");
+  assert.equal(down.entries.some(({ binding }) => binding === 0 || binding === 1), false);
+  assert.equal(down.entries.some(({ binding }) => binding === 10), true);
+  const classify = device.bindGroups.find(({ layout }) => layout === "h");
   assert.equal(classify.entries.some(({ binding }) => binding === 0), false);
-  assert.equal(classify.entries.some(({ binding }) => binding === 7), true);
+  for (const binding of [1, 7, 8, 10]) {
+    assert.equal(classify.entries.some((entry) => entry.binding === binding), true, `binding ${binding}`);
+  }
   assert.equal(runner.buffers[BUFFER_HYBRID_NEIGHBORS][2], 4 * 16);
   for (const group of device.bindGroups) {
     // The WebGPU baseline allows at most 8 storage buffers per stage.
