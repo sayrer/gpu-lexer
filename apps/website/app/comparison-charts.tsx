@@ -8,12 +8,13 @@ type BarDatum = {
 }
 
 const performance: readonly BarDatum[] = [
-  { label: 'gpu-lexer', value: 850, featured: true },
-  { label: 'Sugar High', value: 4829.6 },
-  { label: 'Prism.js', value: 8391.9 },
-  { label: 'Highlight.js', value: 15906.7 },
-  { label: 'Shiki', value: 33096.7 },
-  { label: 'Starry Night', value: 72312.8 },
+  { label: 'Highlights', value: 75.3 },
+  { label: 'gpu-lexer', value: 220.5, featured: true },
+  { label: 'Sugar High', value: 820 },
+  { label: 'Prism.js', value: 1238.1 },
+  { label: 'Highlight.js', value: 1364 },
+  { label: 'Starry Night', value: 11356.1 },
+  { label: 'Shiki', value: 30438.8 },
 ]
 
 const bundleSizes: readonly BarDatum[] = [
@@ -21,7 +22,8 @@ const bundleSizes: readonly BarDatum[] = [
   { label: 'Prism.js (major 6 web languages)', value: 8_848 },
   { label: 'Sugar High (all 29 languages)', value: 9_032 },
   { label: 'Highlight.js (major 6 web languages)', value: 15_261 },
-  { label: 'gpu-lexer (one model)', value: 28_305, featured: true },
+  { label: 'gpu-lexer (one model)', value: 28_599, featured: true },
+  { label: 'Highlights (all 80 languages)', value: 98_187 },
   { label: 'Prism.js (all 297 languages)', value: 165_992 },
   { label: 'Starry Night (major 6 web languages)', value: 189_775 },
   { label: 'Shiki (major 6 web languages)', value: 219_067 },
@@ -42,11 +44,13 @@ export function ComparisonCharts() {
     >
       <BarChart
         format={formatTime}
-        max={80_000}
+        max={40_000}
         note={
           <>
-            One browser run after one warm-up on September 16, 2026. The input
-            was 10 concatenated copies of{' '}
+            Median of three samples on October 22, 2026. Each sample ran in a
+            fresh dedicated worker and timed one call after one warm-up call;
+            the engine order rotated between rounds. The input was 10
+            concatenated copies of{' '}
             <a
               href='https://unpkg.com/three@0.97.0/build/three.min.js'
               target='_blank'
@@ -55,16 +59,17 @@ export function ComparisonCharts() {
               three.min.js
             </a>{' '}
             (5.56M characters). MacBook Pro, Apple M4 Pro, 20-core GPU, 24GB,
-            macOS 26.6.2, Chrome 152. Each engine ran in a dedicated worker; DOM
-            rendering was excluded. gpu-lexer and Shiki returned token data,
-            Starry Night returned a HAST tree, while Sugar High, Prism.js, and
-            Highlight.js returned highlighted HTML. Sugar High 2.3.1, Prism.js
-            1.30.0, Highlight.js 11.12.0, Starry Night 3.11.0, and Shiki 4.4.3.
+            macOS 26.7.1, headless Chrome 156. DOM rendering was excluded.
+            gpu-lexer returned spans, Highlights and Shiki returned themed
+            tokens, Starry Night returned a HAST tree, while Sugar High,
+            Prism.js, and Highlight.js returned highlighted HTML. Highlights
+            0.2.0, Sugar High 2.3.1, Prism.js 1.30.0, Highlight.js 11.12.0,
+            Starry Night 3.11.0, and Shiki 4.4.3.
           </>
         }
         rows={performance}
         subtitle='warmed browser time · lower is better'
-        ticks={[0, 20_000, 40_000, 60_000, 80_000]}
+        ticks={[0, 10_000, 20_000, 30_000, 40_000]}
         title='Highlight 10× three.min.js'
       />
       <BarChart
@@ -72,11 +77,12 @@ export function ComparisonCharts() {
         max={1_600_000}
         note={
           <>
-            Minified and Brotli-compressed browser bundles. gpu-lexer was measured
-            on September 16, 2026; comparison libraries on September 9, 2026.
+            Minified and Brotli-compressed browser bundles, all measured on
+            October 22, 2026.
             Major web includes javascript, typescript, css, html, json,
             and markdown. gpu-lexer uses the same bundle for every language.
-            Starry Night totals include its Oniguruma WASM payload.
+            Starry Night totals include its Oniguruma WASM payload. Highlights
+            ships every lexer in one WebAssembly module; themes are excluded.
           </>
         }
         rows={bundleSizes}

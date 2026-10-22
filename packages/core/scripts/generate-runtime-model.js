@@ -41,9 +41,11 @@ export function runtimeModelContents(model) {
     }
     offset += tensor.length;
     ranges.push(offset, shortestEquivalentScale(model, tensor));
+    let values = "";
     for (let range = 0; range < tensor.sourceRanges.length; range += 2) {
-      weights += model.weights.slice(tensor.sourceRanges[range], tensor.sourceRanges[range + 1]);
+      values += model.weights.slice(tensor.sourceRanges[range], tensor.sourceRanges[range + 1]);
     }
+    weights += tensor.transpose ? transposeSymbols(values, ...tensor.transpose) : values;
   }
   if (weights.length !== offset) {
     throw new Error("runtime model compact weight count is invalid");
@@ -54,6 +56,15 @@ export function runtimeModelContents(model) {
     `export const WEIGHT_BITS=${model.quantization.bits};\n` +
     `export const WEIGHT_RANGES=${JSON.stringify(ranges)};\n` +
     `export const WEIGHTS=${JSON.stringify(weights)};\n`;
+}
+
+// Row-major [rows][columns] to column-major.
+export function transposeSymbols(values, rows, columns) {
+  let result = "";
+  for (let column = 0; column < columns; column++) {
+    for (let row = 0; row < rows; row++) result += values[row * columns + column];
+  }
+  return result;
 }
 
 function shortestEquivalentScale(model, tensor) {

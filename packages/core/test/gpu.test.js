@@ -68,15 +68,24 @@ test("the promoted positional weights expand to finite runtime values", () => {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   const expected = new Float32Array(weights.length);
   for (const tensor of tensors) {
-    let output = tensor.offset;
+    const values = [];
     for (let range = 0; range < tensor.sourceRanges.length; range += 2) {
       for (let index = tensor.sourceRanges[range]; index < tensor.sourceRanges[range + 1]; index++) {
         const encoded = alphabet.indexOf(promotedModel.weights[index]);
         const value = encoded & 1 ? -(encoded + 1) / 2 : encoded / 2;
-        expected[output++] = value * tensor.scale;
+        values.push(value * tensor.scale);
+      }
+    }
+    // Matrices read across output units are stored column-major.
+    const [rows, columns] = tensor.transpose ?? [values.length, 1];
+    for (let row = 0; row < rows; row++) {
+      for (let column = 0; column < columns; column++) {
+        expected[tensor.offset + column * rows + row] = values[row * columns + column];
       }
     }
   }
+  assert.deepEqual(tensors.filter(({ transpose }) => transpose).map(({ name }) => name),
+    ["output", "classifierInput", "auxiliaryOutput", "stateInput", "stateGate", "stateMix"]);
   assert.deepEqual(weights, expected);
   assert.equal(tensors.some(({ name }) => name === "neighborScale"), false);
   assert.ok(tensors.some((tensor, index) => WEIGHT_RANGES[index * 2 + 1] !== tensor.scale));

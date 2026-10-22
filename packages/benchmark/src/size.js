@@ -37,6 +37,8 @@ const targets = [
   { name: "Sugar High", scopes: {
     one: sugar(["javascript"]), web: sugar(web), all: sugar(sugarAll),
   } },
+  // One WebAssembly module with every built-in lexer; it cannot be subset.
+  { name: "Highlights", scopes: { one: highlights(), web: highlights(), all: highlights() } },
   { name: "Starry Night", wasm: true, scopes: {
     one: starry(["source.js"]),
     web: starry(["source.js", "source.ts", "source.css", "text.html.basic", "source.json", "text.md"]),
@@ -63,6 +65,7 @@ for (const language of demoLanguages) {
     "Prism.js": await bundledBytes(prism([language])),
     "Sugar High": await bundledBytes(sugar([language])),
     "Starry Night": await bundledBytes(starry([starryScope(language)])) + onigurumaBytes,
+    Highlights: await bundledBytes(highlights()),
   };
   console.log(`${language}\t${Object.entries(values).map(([name, bytes]) => `${name}=${bytes}`).join("\t")}`);
 }
@@ -83,6 +86,10 @@ function compressedBytes(value) {
 
 function gpuLexer() {
   return "import { parse } from 'gpu-lexer'; globalThis.__size = parse;";
+}
+
+function highlights() {
+  return "import { codeToTokens } from '@pierre/highlights'; globalThis.__size = codeToTokens;";
 }
 
 function shiki(languages) {

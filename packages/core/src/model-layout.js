@@ -68,10 +68,30 @@ export function runtimeTensorLayout(model) {
     const length = name === "featureEmbedding"
       ? compactFeatures.inputSize * hidden
       : source.length;
-    const tensor = { name, offset, length, scale: source.scale, sourceRanges };
+    const transpose = transposedShape(model, name);
+    if (transpose && transpose[0] * transpose[1] !== length) {
+      throw new Error(`invalid runtime matrix shape for ${name}`);
+    }
+    const tensor = { name, offset, length, scale: source.scale, sourceRanges, transpose };
     offset += length;
     return tensor;
   });
+}
+
+// The shader reads these [rows][columns] matrices with the row (output unit)
+// varying across adjacent threads. The runtime buffer stores them column-major
+// so those threads read adjacent weights; values and summation order are
+// unchanged.
+function transposedShape(model, name) {
+  const hidden = model.hiddenSize;
+  const classifier = model.architecture.classifierDimensions;
+  const auxiliary = model.architecture.auxiliaryStates.length;
+  if (name === "stateInput" || name === "stateGate") return [hidden, hidden];
+  if (name === "stateMix") return [hidden, hidden * 2];
+  if (name === "classifierInput") return [classifier, hidden * 2 + auxiliary];
+  if (name === "auxiliaryOutput") return [auxiliary, hidden * 2];
+  if (name === "output") return [model.outputSize, classifier];
+  return undefined;
 }
 
 function embeddingSourceRanges(tensor, hidden, inputSize, omittedRows) {

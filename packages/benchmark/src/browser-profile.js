@@ -1,5 +1,5 @@
 import {
-  BUFFER_BLOCKS, BUFFER_FEATURES, BUFFER_HYBRID_LOCAL, BUFFER_HYBRID_NEIGHBORS, BUFFER_LABELS,
+  BUFFER_BLOCKS, BUFFER_FEATURES, BUFFER_HYBRID_NEIGHBORS, BUFFER_LABELS,
   BUFFER_LEAF_STATES, BUFFER_PARAMS, BUFFER_READBACK, BUFFER_STREAMS,
   BUFFER_SCRATCH, BUFFER_TREE_UP, PIPELINE_TREE_GLOBAL,
   createInspectableRuntime as createRuntime, createTreeLayout,
@@ -102,7 +102,6 @@ async function runProfiledTree(runner, features, streams, profileGpuPasses) {
   runner.ensureBuffer(BUFFER_SCRATCH,
     Math.max(blockCount * HIDDEN_SIZE * 16, treeNodes * HIDDEN_SIZE * 4), STORAGE);
   runner.ensureBuffer(BUFFER_HYBRID_NEIGHBORS, blockCount * 8, STORAGE);
-  runner.ensureBuffer(BUFFER_HYBRID_LOCAL, tokenCount * HIDDEN_SIZE * 4, STORAGE);
   const timestampCount = TREE_PASS_NAMES.length * 2;
   const timestampsEnabled = profileGpuPasses && device.features?.has?.("timestamp-query");
   const timestampSet = timestampsEnabled
@@ -128,7 +127,7 @@ async function runProfiledTree(runner, features, streams, profileGpuPasses) {
   const encoder = device.createCommandEncoder();
   encoder.clearBuffer(labelBuffer, 0, labelBytes);
   const groups = runner.treeBindGroups ??= runner.createTreeBindGroups();
-  const counts = [Math.ceil(blockCount / 64), Math.ceil(streams.length / 128),
+  const counts = [Math.ceil(blockCount / 64), streams.length / 2,
     blockCount, streams.length * 2, blockCount];
   const dispatches = counts.map((count, index) => [runner.pipelines[index], groups[index], count]);
   dispatches.push(

@@ -10,6 +10,33 @@ const WORKSPACE_DATA = 1;
 const WORKSPACE_RANGES = 2;
 const PREPARED_WORKSPACE = 4;
 
+// ASCII lookup tables. Code units above 127 are word characters normalized to
+// "_" (95), so every normalized code unit, and every neighboring pair of them,
+// fits a 128-entry row.
+const ASCII_KIND = new Uint8Array(128).fill(TREE_PART_SYMBOL);
+const WORD_FLAGS = new Uint8Array(128);
+const PAIR_CODES = new Uint8Array(128 * 128);
+const SYMBOL_PAIR_HASHES = new Uint8Array(128 * 128);
+for (let code = 0; code < 128; code++) {
+  if (code === 10 || code === 13) ASCII_KIND[code] = TREE_PART_NEWLINE;
+  else if (code === 9 || code === 11 || code === 12 || code === 32) ASCII_KIND[code] = TREE_PART_SPACE;
+  else if (code >= 97 && code <= 122) WORD_FLAGS[code] = 1;
+  else if (code >= 65 && code <= 90) WORD_FLAGS[code] = 2;
+  else if (code >= 48 && code <= 57) WORD_FLAGS[code] = 4;
+  else if (code === 95) WORD_FLAGS[code] = 8;
+  if (WORD_FLAGS[code]) ASCII_KIND[code] = TREE_PART_WORD;
+  for (let right = 0; right < 128; right++) {
+    // Zero remains an edge/no-neighbor sentinel; 31 buckets cover every unseen
+    // neighboring boundary without a growing hand-authored operator table.
+    SYMBOL_PAIR_HASHES[code << 7 | right] = 1 + ((Math.imul(code + 1, 131) ^ right) >>> 0) % 31;
+  }
+}
+// Pair codes 1-14 in order. Code 15 is never emitted.
+const PAIRS = "///**/--=>::</{{${}}->???.<>";
+for (let index = 0; index < PAIRS.length; index += 2) {
+  PAIR_CODES[PAIRS.charCodeAt(index) << 7 | PAIRS.charCodeAt(index + 1)] = index / 2 + 1;
+}
+
 function createWorkspace() {
   return [
     INITIAL_CAPACITY,
@@ -18,12 +45,16 @@ function createWorkspace() {
   ];
 }
 
-function growWorkspace(workspace) {
-  const capacity = workspace[WORKSPACE_CAPACITY] * 2;
+// Grow from the parts-per-code-unit ratio seen so far, so large sources need
+// one or two reallocations instead of one per doubling. A source never has
+// more parts than code units.
+function growWorkspace(workspace, count, offset, length) {
+  const estimate = Math.ceil(count / offset * length * 1.0625) + INITIAL_CAPACITY;
+  const capacity = Math.max(count + 1, Math.min(length, Math.max(workspace[WORKSPACE_CAPACITY] * 2, estimate)));
   const data = new Uint32Array(capacity * TREE_FEATURE_STRIDE);
   const ranges = new Uint32Array(capacity * 2);
-  data.set(workspace[WORKSPACE_DATA]);
-  ranges.set(workspace[WORKSPACE_RANGES]);
+  data.set(workspace[WORKSPACE_DATA].subarray(0, count * TREE_FEATURE_STRIDE));
+  ranges.set(workspace[WORKSPACE_RANGES].subarray(0, count * 2));
   workspace[WORKSPACE_CAPACITY] = capacity;
   workspace[WORKSPACE_DATA] = data;
   workspace[WORKSPACE_RANGES] = ranges;
@@ -32,138 +63,101 @@ function growWorkspace(workspace) {
 /** Split source into words, horizontal-space runs, individual newlines, and symbols. */
 export function prepareTreeSource(source) {
   const workspace = pool.pop() ?? createWorkspace();
+  const length = source.length;
+  let capacity = workspace[WORKSPACE_CAPACITY];
+  let data = workspace[WORKSPACE_DATA];
+  let ranges = workspace[WORKSPACE_RANGES];
   let count = 0;
   let offset = 0;
   let lineStart = true;
-  let previousLast = -1;
+  let previousLast = 0;
   let previousKind = -1;
-  while (offset < source.length) {
+  while (offset < length) {
     const from = offset;
-    const firstRaw = source.charCodeAt(offset);
-    let kind;
-    if (firstRaw === 10 || firstRaw === 13) {
-      kind = TREE_PART_NEWLINE;
-    } else if (isHorizontalSpace(firstRaw)) {
-      kind = TREE_PART_SPACE;
-    } else if (isWord(firstRaw)) {
-      kind = TREE_PART_WORD;
-    } else {
-      kind = TREE_PART_SYMBOL;
-    }
-
+    const firstRaw = source.charCodeAt(offset++);
+    const first = firstRaw > 127 ? 95 : firstRaw;
+    const kind = firstRaw > 127 ? TREE_PART_WORD : ASCII_KIND[firstRaw];
     let flags = lineStart ? 16 : 0;
-    const first = normalize(firstRaw);
     let last = first;
-    let hash = 0;
-    let secondaryHash = 0;
+    let packed = kind | first << 5;
     if (kind === TREE_PART_WORD) {
-      hash = 2166136261;
-      secondaryHash = 0x9e3779b9;
-      do {
-        const normalized = normalize(source.charCodeAt(offset));
-        last = normalized;
+      let hash = Math.imul(2166136261 ^ first, 16777619);
+      let secondaryHash = Math.imul(0x9e3779b9 ^ first, 2246822519);
+      flags |= WORD_FLAGS[first];
+      while (offset < length) {
+        const raw = source.charCodeAt(offset);
+        let normalized = 95;
+        if (raw <= 127) {
+          if (ASCII_KIND[raw] !== TREE_PART_WORD) break;
+          normalized = raw;
+        }
         hash = Math.imul(hash ^ normalized, 16777619);
         secondaryHash = Math.imul(secondaryHash ^ normalized, 2246822519);
-        if (normalized >= 97 && normalized <= 122) flags |= 1;
-        else if (normalized >= 65 && normalized <= 90) flags |= 2;
-        else if (normalized >= 48 && normalized <= 57) flags |= 4;
-        else if (normalized === 95) flags |= 8;
+        flags |= WORD_FLAGS[normalized];
+        last = normalized;
         offset += 1;
-      } while (offset < source.length && isWord(source.charCodeAt(offset)));
+      }
+      packed |= (hash & 255) << 19;
+      flags |= (secondaryHash & 127) << 15;
     } else if (kind === TREE_PART_SPACE) {
-      do {
+      if (firstRaw === 9) flags |= 32;
+      while (offset < length) {
         const raw = source.charCodeAt(offset);
-        last = normalize(raw);
+        if (raw > 127 || ASCII_KIND[raw] !== TREE_PART_SPACE) break;
         if (raw === 9) flags |= 32;
+        last = raw;
         offset += 1;
-      } while (offset < source.length && isHorizontalSpace(source.charCodeAt(offset)));
+      }
     } else if (kind === TREE_PART_NEWLINE) {
-      offset += 1;
-      if (firstRaw === 13 && source.charCodeAt(offset) === 10) {
+      if (firstRaw === 13 && offset < length && source.charCodeAt(offset) === 10) {
         last = 10;
         offset += 1;
       }
-    } else {
-      if (firstRaw === 92) flags |= 64;
-      offset += 1;
+      lineStart = true;
+    } else if (firstRaw === 92) {
+      flags |= 64;
     }
-    if (count === workspace[WORKSPACE_CAPACITY]) growWorkspace(workspace);
-    const to = offset;
-    const length = to - from;
+    if (kind === TREE_PART_WORD || kind === TREE_PART_SYMBOL) lineStart = false;
+
+    if (count === capacity) {
+      growWorkspace(workspace, count, offset, length);
+      capacity = workspace[WORKSPACE_CAPACITY];
+      data = workspace[WORKSPACE_DATA];
+      ranges = workspace[WORKSPACE_RANGES];
+    }
     const base = count * TREE_FEATURE_STRIDE;
-    workspace[WORKSPACE_DATA][base] = kind | (lengthBucket(length) << 2) | (first << 5) |
-      (last << 12) | ((hash & 255) << 19);
-    workspace[WORKSPACE_DATA][base + 1] = flags |
-      (kind === TREE_PART_WORD ? (secondaryHash & 127) << 15 : 0);
+    const partLength = offset - from;
+    packed |= (partLength > 127 ? 7 : 31 - Math.clz32(partLength)) << 2 | last << 12;
     if (count > 0) {
-      const pair = pairCode(previousLast, first);
-      workspace[WORKSPACE_DATA][base + 1] |= pair << 7;
-      workspace[WORKSPACE_DATA][base - 1] |= pair << 11;
+      const pairIndex = previousLast << 7 | first;
+      const pair = PAIR_CODES[pairIndex];
+      let previousContext = pair << 11;
+      flags |= pair << 7;
       if (kind === TREE_PART_SYMBOL || previousKind === TREE_PART_SYMBOL) {
-        const generic = symbolPairHash(previousLast, first);
-        workspace[WORKSPACE_DATA][base + 1] |= generic << 22;
-        workspace[WORKSPACE_DATA][base - 1] |= generic << 27;
+        const generic = SYMBOL_PAIR_HASHES[pairIndex];
+        flags |= generic << 22;
+        previousContext |= generic << 27;
       }
+      data[base - 1] |= previousContext;
     }
-    workspace[WORKSPACE_RANGES][count * 2] = from;
-    workspace[WORKSPACE_RANGES][count * 2 + 1] = to;
+    data[base] = packed;
+    data[base + 1] = flags;
+    ranges[count * 2] = from;
+    ranges[count * 2 + 1] = offset;
     count += 1;
     previousLast = last;
     previousKind = kind;
-    if (kind === TREE_PART_NEWLINE) lineStart = true;
-    else if (kind !== TREE_PART_SPACE) lineStart = false;
   }
   // Compact internal tuple: data, ranges, streams, token count, workspace.
   return [
-    workspace[WORKSPACE_DATA].subarray(0, count * TREE_FEATURE_STRIDE),
-    workspace[WORKSPACE_RANGES].subarray(0, count * 2),
+    data.subarray(0, count * TREE_FEATURE_STRIDE),
+    ranges.subarray(0, count * 2),
     Uint32Array.of(0, count), count, workspace,
   ];
-}
-
-function symbolPairHash(left, right) {
-  // Zero remains an edge/no-neighbor sentinel; 31 buckets cover every unseen
-  // neighboring boundary without a growing hand-authored operator table.
-  return 1 + ((Math.imul(left + 1, 131) ^ right) >>> 0) % 31;
 }
 
 export function releaseTreePrepared(prepared) {
   if (!prepared?.[PREPARED_WORKSPACE]) return;
   if (pool.length < MAX_POOLED_WORKSPACES) pool.push(prepared[PREPARED_WORKSPACE]);
   prepared[PREPARED_WORKSPACE] = null;
-}
-
-function isHorizontalSpace(code) {
-  return code === 9 || code === 11 || code === 12 || code === 32;
-}
-
-function isWord(code) {
-  return code > 127 || code === 95 || (code >= 48 && code <= 57) ||
-    (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
-}
-
-function normalize(code) {
-  return code > 127 ? 95 : code;
-}
-
-function lengthBucket(length) {
-  return Math.min(7, 31 - Math.clz32(length));
-}
-
-function pairCode(left, right) {
-  if (left === 47 && right === 47) return 1; // //
-  if (left === 47 && right === 42) return 2; // /*
-  if (left === 42 && right === 47) return 3; // */
-  if (left === 45 && right === 45) return 4; // --
-  if (left === 61 && right === 62) return 5; // =>
-  if (left === 58 && right === 58) return 6; // ::
-  if (left === 60 && right === 47) return 7; // </
-  if (left === 123 && right === 123) return 8; // {{
-  if (left === 36 && right === 123) return 9; // ${
-  if (left === 125 && right === 125) return 10; // }}
-  if (left === 45 && right === 62) return 11; // ->
-  if (left === 63 && right === 63) return 12; // ??
-  if (left === 63 && right === 46) return 13; // ?.
-  if (left === 60 && right === 62) return 14; // <>
-  return 0;
 }

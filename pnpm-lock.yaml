@@ -59,6 +59,9 @@ importers:
 
   packages/benchmark:
     dependencies:
+      '@pierre/highlights':
+        specifier: 0.2.0
+        version: 0.2.0
       '@wooorm/starry-night':
         specifier: 3.11.0
         version: 3.11.0
@@ -505,6 +508,9 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
+
+  '@pierre/highlights@0.2.0':
+    resolution: {integrity: sha512-hTpcOU1EzDAP4bYtEhxmMu2jwMvtkUydRUBUpWMSHTs3dw0IaC3Ld5ansMy18L0GE3b6Vfl2OGkLK+pWWpnBmw==}
 
   '@shikijs/core@4.4.3':
     resolution: {integrity: sha512-QCR4q2ZO/ILJEuwiBMel4wdcTDb1JGwfjKTxPDF6x8ixOaluPrVqIn06C99AcRPhmYlBR56d/Fb+GN58GzExpg==}
@@ -1291,6 +1297,8 @@ snapshots:
 
   '@next/swc-win32-x64-msvc@16.3.4':
     optional: true
+
+  '@pierre/highlights@0.2.0': {}
 
   '@shikijs/core@4.4.3':
     dependencies:

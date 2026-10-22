@@ -18,6 +18,7 @@ await build({
     "sugar-high": resolve(source, "sugar-high.js"),
     "starry-night": resolve(source, "starry-night.js"),
     shiki: resolve(source, "shiki.js"),
+    "pierre-highlights": resolve(source, "pierre-highlights.js"),
     profile: resolve(source, "profile.js"),
     "profile-runner": resolve(source, "profile-runner.js"),
   },

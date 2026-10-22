@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { initialize, validate } from "wgslender";
 import {
-  BUFFER_HYBRID_LOCAL, BUFFER_LEAF_STATES, BUFFER_SCRATCH,
+  BUFFER_LEAF_STATES, BUFFER_SCRATCH,
   createInspectableRuntime as createRuntime,
 } from "../src/gpu.js";
 import { runtimeTensorLayout } from "../src/model-layout.js";
@@ -77,6 +77,7 @@ for (const hidden of [32]) for (const f16 of [false, true]) {
     assert.match(shader, /@workgroup_size\(256\)\s+fn tree_global/);
     assert.match(shader, /bitcast<f32>\(previous\)/);
     assert.doesNotMatch(shader, /fn hybrid_local_states/);
+    assert.doesNotMatch(shader, /var<storage, read_write> hybrid_local/);
     assert.doesNotMatch(shader, /var<storage, read_write> hybrid_pairs/);
     assert.match(shader, new RegExp(`var<workgroup> hybrid_work: array<vec4<f32>, ${32 * hidden}>`));
     assert.match(shader, /var<workgroup> classifier_projected/);
@@ -148,19 +149,22 @@ test("tree runtime wires the active hybrid passes and reuses buffers", async () 
   const streams = Uint32Array.of(0, 65, 65, 1);
   await runner.run(new Uint32Array(66 * 2), streams, (labels) => assert.equal(labels.length, 17));
   assert.deepEqual(device.dispatches, [
-    ["a", 1, 1], ["b", 1, 1], ["c", 4, 1], ["d", 8, 1],
+    ["a", 1, 1], ["b", 2, 1], ["c", 4, 1], ["d", 8, 1],
     ["e", 4, 1], ["f", 2, 1], ["g", 4, 1],
   ]);
   assert.equal(device.computePasses, 1);
   const up = device.bindGroups.find(({ layout }) => layout === "e");
-  assert.equal(up.entries.some(({ binding }) => binding === 0), false);
+  // The mix pass recomputes local states from features instead of reading a
+  // token_count * hidden f32 buffer written by the scan pass.
+  assert.deepEqual(up.entries.map(({ binding }) => binding), [0, 2, 3, 4, 5, 6, 9, 11, 12]);
+  assert.equal(device.bindGroups.some(({ entries }) => entries.some(({ binding }) => binding === 10)), false);
   for (const group of device.bindGroups) {
     // The WebGPU baseline allows at most 8 storage buffers per stage.
     assert.ok(group.entries.filter(({ binding }) => binding !== 2).length <= 8);
   }
   assert.equal(runner.treeBindGroups[4], up);
   assert.equal(runner.buffers[BUFFER_SCRATCH][2], 4 * 32 * 16);
-  assert.equal(runner.buffers[BUFFER_HYBRID_LOCAL][2], 66 * 32 * 4);
+  assert.equal(runner.buffers[10], undefined);
   assert.equal(runner.buffers[BUFFER_LEAF_STATES][2], 66 * 32 * 2);
   assert.match(device.code, /fn f\(/);
   const before = device.bindGroups.length;
