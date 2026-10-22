@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { initialize, validate } from "wgslender";
 import {
-  BUFFER_HYBRID_LOCAL, BUFFER_LEAF_STATES, BUFFER_SCRATCH,
+  BUFFER_HYBRID_LOCAL, BUFFER_HYBRID_NEIGHBORS, BUFFER_LEAF_STATES, BUFFER_SCRATCH,
   createInspectableRuntime as createRuntime,
 } from "../src/gpu.js";
 import { runtimeTensorLayout } from "../src/model-layout.js";
@@ -75,7 +75,16 @@ for (const hidden of [32]) for (const f16 of [false, true]) {
     assert.match(shader, /kind != 1u && kind != 2u/);
     assert.match(shader, /token \+ d >= start \+ 2u/);
     assert.match(shader, /@workgroup_size\(256\)\s+fn tree_global/);
+    assert.match(shader, /@workgroup_size\(256\)\s+fn hybrid_neighbor_prefixes/);
+    assert.match(shader, /@workgroup_size\(128\)\s+fn tree_down_classify/);
     assert.match(shader, /bitcast<f32>\(previous\)/);
+    // Neighbour lookups come from the block mask, not per-lane search loops.
+    const scanBlocks = shader.slice(shader.indexOf("fn hybrid_scan_blocks"), shader.indexOf("fn hybrid_scan_prefixes"));
+    assert.doesNotMatch(scanBlocks, /break;/);
+    assert.match(scanBlocks, /countTrailingZeros\(above\)/);
+    const classify = shader.slice(shader.indexOf("fn tree_down_classify"));
+    assert.doesNotMatch(classify, /features\[/);
+    assert.match(classify, /block_masks\[block_index\]\.z/);
     assert.doesNotMatch(shader, /fn hybrid_local_states/);
     assert.doesNotMatch(shader, /var<storage, read_write> hybrid_pairs/);
     assert.match(shader, new RegExp(`var<workgroup> hybrid_work: array<vec4<f32>, ${32 * hidden}>`));
@@ -148,12 +157,17 @@ test("tree runtime wires the active hybrid passes and reuses buffers", async () 
   const streams = Uint32Array.of(0, 65, 65, 1);
   await runner.run(new Uint32Array(66 * 2), streams, (labels) => assert.equal(labels.length, 17));
   assert.deepEqual(device.dispatches, [
-    ["a", 1, 1], ["b", 1, 1], ["c", 4, 1], ["d", 8, 1],
+    ["a", 1, 1], ["b", 2, 1], ["c", 4, 1], ["d", 8, 1],
     ["e", 4, 1], ["f", 2, 1], ["g", 4, 1],
   ]);
   assert.equal(device.computePasses, 1);
   const up = device.bindGroups.find(({ layout }) => layout === "e");
   assert.equal(up.entries.some(({ binding }) => binding === 0), false);
+  // The classifier reads block masks through the read-only binding instead of features.
+  const classify = device.bindGroups.find(({ layout }) => layout === "g");
+  assert.equal(classify.entries.some(({ binding }) => binding === 0), false);
+  assert.equal(classify.entries.some(({ binding }) => binding === 7), true);
+  assert.equal(runner.buffers[BUFFER_HYBRID_NEIGHBORS][2], 4 * 16);
   for (const group of device.bindGroups) {
     // The WebGPU baseline allows at most 8 storage buffers per stage.
     assert.ok(group.entries.filter(({ binding }) => binding !== 2).length <= 8);

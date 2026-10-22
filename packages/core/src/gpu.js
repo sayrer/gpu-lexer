@@ -130,7 +130,7 @@ export function createRuntime(
     ensureBuffer(BUFFER_TREE_UP, treeBytes, STORAGE);
     ensureBuffer(BUFFER_SCRATCH,
       Math.max(blockCount * HIDDEN_SIZE * 16, treeNodes * HIDDEN_SIZE * 4), STORAGE);
-    ensureBuffer(BUFFER_HYBRID_NEIGHBORS, blockCount * 8, STORAGE);
+    ensureBuffer(BUFFER_HYBRID_NEIGHBORS, blockCount * 16, STORAGE);
     ensureBuffer(BUFFER_HYBRID_LOCAL, tokenCount * HIDDEN_SIZE * 4, STORAGE);
     try {
       device.queue.writeBuffer(featureBuffer, 0, features);
@@ -148,7 +148,9 @@ export function createRuntime(
         const x = Math.min(65_535, workgroups);
         pass.dispatchWorkgroups(x, Math.ceil(workgroups / x));
       };
-      const counts = [(blockCount + 63) >> 6, (streams.length + 127) >> 7,
+      // Block-level passes take one workgroup per block; the neighbor prefix
+      // scan and the global tree take one per stream.
+      const counts = [(blockCount + 63) >> 6, streams.length / 2,
         blockCount, streams.length * 2, blockCount];
       counts.forEach((count, index) => encode(pipelines[index], groups[index], count));
       encode(pipelines[PIPELINE_TREE_GLOBAL], groups[PIPELINE_TREE_GLOBAL], streams.length / 2);
@@ -204,8 +206,8 @@ export function createRuntime(
         [10, BUFFER_HYBRID_LOCAL], [11, BUFFER_SCRATCH]],
       [[2, BUFFER_PARAMS], [3, BUFFER_STREAMS], [4, BUFFER_WEIGHTS],
         [6, BUFFER_TREE_UP], [11, BUFFER_SCRATCH]],
-      [[0, BUFFER_FEATURES], [1, BUFFER_LABELS], [2, BUFFER_PARAMS], [4, BUFFER_WEIGHTS],
-        [3, BUFFER_STREAMS], [5, BUFFER_LEAF_STATES], [9, BUFFER_BLOCKS], [11, BUFFER_SCRATCH]],
+      [[1, BUFFER_LABELS], [2, BUFFER_PARAMS], [4, BUFFER_WEIGHTS], [3, BUFFER_STREAMS],
+        [5, BUFFER_LEAF_STATES], [7, BUFFER_HYBRID_NEIGHBORS], [9, BUFFER_BLOCKS], [11, BUFFER_SCRATCH]],
     ];
     return entries.map((entry, index) => bind(pipelines[index], entry));
   }

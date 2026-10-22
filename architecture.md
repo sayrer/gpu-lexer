@@ -29,7 +29,9 @@ The promoted format-9 model has 32 hidden channels and a 72-unit classifier.
 6. The classifier combines each enhanced leaf, returned tree context, and predicted auxiliary lexical states to produce nine logits.
 7. Four byte-sized labels share each readback word. The CPU maps labels back to the prepared ranges and merges adjacent equal styled labels.
 
-Large inputs are tiled into 32-part subtrees for WebGPU workgroup locality. The local scan and tree-up kernels process four parts concurrently with 128-thread workgroups, while retaining the original arithmetic order within each part and recurrent scan. Block roots continue through the global tree; tiling is an execution detail, not semantic segmentation.
+Large inputs are tiled into 32-part subtrees for WebGPU workgroup locality. The local scan, tree-up, and tree-down kernels process four parts concurrently with 128-thread workgroups, while retaining the original arithmetic order within each part and recurrent scan. Block roots continue through the global tree; tiling is an execution detail, not semantic segmentation.
+
+Each block carries a 32-bit mask of its styled parts (words and symbols). The nearest styled neighbors of a part come from that mask with count-leading-zeros and count-trailing-zeros rather than per-lane search loops, and the neighbors outside a block come from a parallel prefix scan over the stream's blocks. The classifier compacts each block's styled parts so every lane in a batch has work, and skips whitespace entirely; whitespace keeps the cleared `plain` label.
 
 ## Model representation
 
